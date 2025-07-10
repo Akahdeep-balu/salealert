@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Dashboard - New India Bazar</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-green-50 min-h-screen p-8 font-sans">
+
+  <header class="mb-10 text-center">
+    <h1 class="text-4xl font-bold text-green-700 mb-2">New India Bazar Admin</h1>
+    <p class="text-green-600">Upload flyers, schedule SMS, and view registered users</p>
+  </header>
+
+  <main class="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow-lg space-y-10">
+
+    <!-- Flyer Upload Form -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 text-gray-800">Upload Flyer (PNG or PDF)</h2>
+      <form id="uploadForm" class="flex flex-col sm:flex-row gap-4 items-center" enctype="multipart/form-data">
+        <input type="file" id="flyerFile" name="flyer" accept=".png,.pdf" required
+               class="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 flex-grow" />
+        <button type="submit"
+                class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded font-semibold transition">
+          Upload
+        </button>
+      </form>
+      <p id="uploadMsg" class="mt-3 text-sm"></p>
+    </section>
+
+    <!-- Schedule Form -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 text-gray-800">Schedule SMS Notification</h2>
+      <form id="scheduleForm" class="flex flex-col sm:flex-row gap-4 items-center">
+        <label for="scheduleTime" class="font-semibold text-gray-700">Send SMS at:</label>
+        <input type="datetime-local" id="scheduleTime" required
+               class="border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 flex-grow" />
+        <button type="submit" 
+                class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded font-semibold transition">
+          Schedule
+        </button>
+      </form>
+      <p id="scheduleMsg" class="mt-3 text-sm"></p>
+    </section>
+
+    <!-- Registered Users Table -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4 text-gray-800">Registered Users</h2>
+      <table class="w-full border border-gray-300 rounded-lg overflow-hidden text-left">
+        <thead class="bg-green-100">
+          <tr>
+            <th class="px-4 py-2 border-b border-gray-300">Name</th>
+            <th class="px-4 py-2 border-b border-gray-300">Phone</th>
+            <th class="px-4 py-2 border-b border-gray-300">Signed Up At</th>
+            <th class="px-4 py-2 border-b border-gray-300">Action</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <!-- Rows inserted by JS -->
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script>
+    const uploadForm = document.getElementById('uploadForm');
+    const flyerFileInput = document.getElementById('flyerFile');
+    const uploadMsg = document.getElementById('uploadMsg');
+
+    const scheduleTimeInput = document.getElementById('scheduleTime');
+    const scheduleForm = document.getElementById('scheduleForm');
+    const scheduleMsg = document.getElementById('scheduleMsg');
+    const usersTableBody = document.getElementById('usersTableBody');
+
+    // Store uploaded flyer URL after successful upload
+    let uploadedFlyerURL = null;
+
+    // Set min & default for scheduleTime (now + 10min)
+    function toDatetimeLocal(date) {
+      const pad = (n) => n.toString().padStart(2, '0');
+      return date.getFullYear() + '-' +
+        pad(date.getMonth() + 1) + '-' +
+        pad(date.getDate()) + 'T' +
+        pad(date.getHours()) + ':' +
+        pad(date.getMinutes());
+    }
+
+    const now = new Date();
+    const plus10min = new Date(now.getTime() + 10 * 60000);
+    scheduleTimeInput.min = toDatetimeLocal(plus10min);
+    scheduleTimeInput.value = toDatetimeLocal(plus10min);
+
+    // Fetch and display registered users
+    async function fetchUsers() {
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/recipients');
+        if (!res.ok) throw new Error('Failed to fetch users');
+        const users = await res.json();
+
+        usersTableBody.innerHTML = '';
+        if (users.length === 0) {
+          usersTableBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">No users found</td></tr>`;
+          return;
+        }
+
+        users.forEach(user => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="px-4 py-2 border-b border-gray-300">${user.name || '-'}</td>
+            <td class="px-4 py-2 border-b border-gray-300">${user.phone}</td>
+            <td class="px-4 py-2 border-b border-gray-300">${new Date(user.created_at).toLocaleString()}</td>
+            <td class="px-4 py-2 border-b border-gray-300">
+              <button class="delete-btn bg-red-500 text-white px-3 py-1 rounded" data-phone="${user.phone}">Delete</button>
+            </td>
+          `;
+          usersTableBody.appendChild(tr);
+        });
+
+        // Attach delete event listeners AFTER rendering
+        usersTableBody.querySelectorAll('.delete-btn').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            const phone = btn.getAttribute('data-phone');
+            if (!confirm('Are you sure you want to delete this user?')) return;
+            try {
+              const res = await fetch('http://127.0.0.1:5000/api/delete_recipient', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone })
+              });
+              const data = await res.json();
+              if (res.ok) {
+                fetchUsers(); // Refresh the table
+              } else {
+                alert(data.error || 'Failed to delete user');
+              }
+            } catch (err) {
+              alert('Network error. Try again later.');
+            }
+          });
+        });
+
+      } catch (err) {
+        usersTableBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-red-600">Error loading users</td></tr>`;
+      }
+    }
+
+    fetchUsers();
+
+    // Flyer Upload Handler
+    uploadForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      uploadMsg.textContent = '';
+      uploadMsg.classList.remove('text-red-600', 'text-green-700');
+
+      const file = flyerFileInput.files[0];
+      if (!file) {
+        uploadMsg.textContent = 'Please select a file to upload.';
+        uploadMsg.classList.add('text-red-600');
+        return;
+      }
+
+      const allowedTypes = ['image/png', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        uploadMsg.textContent = 'Invalid file type. Only PNG or PDF allowed.';
+        uploadMsg.classList.add('text-red-600');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('flyer', file);
+
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/upload_flyer', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (res.ok) {
+          // Save flyer URL here for scheduling use
+          uploadedFlyerURL = data.flyer_url;
+          uploadMsg.textContent = 'Flyer uploaded successfully!';
+          uploadMsg.classList.add('text-green-700');
+          uploadForm.reset();
+        } else {
+          uploadMsg.textContent = data.error || 'Failed to upload flyer.';
+          uploadMsg.classList.add('text-red-600');
+          uploadedFlyerURL = null;
+        }
+      } catch (err) {
+        uploadMsg.textContent = 'Network error. Please try again later.';
+        uploadMsg.classList.add('text-red-600');
+        uploadedFlyerURL = null;
+      }
+    });
+
+    // Schedule SMS Handler
+    scheduleForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      scheduleMsg.textContent = '';
+      scheduleMsg.classList.remove('text-red-600', 'text-green-700');
+
+      // Require flyer upload before scheduling
+      if (!uploadedFlyerURL) {
+        scheduleMsg.textContent = 'Please upload a flyer before scheduling.';
+        scheduleMsg.classList.add('text-red-600');
+        return;
+      }
+
+      const scheduledAt = scheduleTimeInput.value;
+      if (!scheduledAt) {
+        scheduleMsg.textContent = 'Please select a valid date and time.';
+        scheduleMsg.classList.add('text-red-600');
+        return;
+      }
+
+      const selectedDate = new Date(scheduledAt);
+      const nowPlus10 = new Date(Date.now() + 10 * 60000);
+
+      if (selectedDate < nowPlus10) {
+        scheduleMsg.textContent = 'Please select a time at least 10 minutes from now.';
+        scheduleMsg.classList.add('text-red-600');
+        return;
+      }
+
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            scheduled_time: scheduledAt,
+            flyer_url: uploadedFlyerURL  // Send flyer URL along with scheduled time
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          scheduleMsg.textContent = 'SMS scheduled successfully!';
+          scheduleMsg.classList.add('text-green-700');
+        } else {
+          scheduleMsg.textContent = data.error || 'Failed to schedule SMS';
+          scheduleMsg.classList.add('text-red-600');
+        }
+      } catch (err) {
+        scheduleMsg.textContent = 'Network error. Try again later.';
+        scheduleMsg.classList.add('text-red-600');
+      }
+    });
+  </script>
+
+</body>
+</html>
