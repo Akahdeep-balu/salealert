@@ -18,13 +18,13 @@ app = Flask(__name__)
 CORS(app, origins="*")
 
 DATABASE_URL = os.getenv('DATABASE_URL')
-
+print(DATABASE_URL)
 # Twilio config
 twilio_sid = os.getenv('TWILIO_ACCOUNT_SID')
 twilio_token = os.getenv('TWILIO_AUTH_TOKEN')
 twilio_phone = os.getenv('TWILIO_PHONE_NUMBER')
 twilio_client = Client(twilio_sid, twilio_token)
-
+print(twilio_phone,twilio_sid)
 # AWS S3 config
 AWS_ACCESS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
@@ -43,7 +43,7 @@ scheduler.start()
 
 def create_connection():
     try:
-        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+        conn = psycopg2.connect(DATABASE_URL,sslmode='require')
         return conn
     except Exception as e:
         print(f"DB connection error: {e}")
